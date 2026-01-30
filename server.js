@@ -6,11 +6,13 @@ const wss = new WebSocket.Server({
 
 let players = {};
 let blocks = {};
+let nextPlayerNumber = 1;
 
 wss.on("connection", ws => {
 
   let playerId = null;
-
+  let playerNumber = nextPlayerNumber++;
+  
   // send world on join
   ws.send(JSON.stringify({
     players,
@@ -25,7 +27,7 @@ wss.on("connection", ws => {
     // PLAYER UPDATE
     if (data.player) {
       playerId = data.player.id;
-      players[playerId] = data.player;
+      players[playerId] = {...data.player, playerNumber};
     }
 
     // BLOCK UPDATE
