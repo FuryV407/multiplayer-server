@@ -5,37 +5,57 @@ const wss = new WebSocket.Server({
 });
 
 let players = {};
-let blocks = [];
+let blocks = {};
 
 wss.on("connection", ws => {
 
-  // send world when someone joins
-  ws.send(JSON.stringify({ players, blocks }));
+  let playerId = null;
+
+  // send world on join
+  ws.send(JSON.stringify({
+    players,
+    blocks: Object.values(blocks)
+  }));
 
   ws.on("message", msg => {
     let data;
     try { data = JSON.parse(msg); }
     catch { return; }
 
+    // PLAYER UPDATE
     if (data.player) {
-      players[data.player.id] = data.player;
+      playerId = data.player.id;
+      players[playerId] = data.player;
     }
 
-    if (data.blocks) {
+    // BLOCK UPDATE
+    if (Array.isArray(data.blocks)) {
       for (let b of data.blocks) {
-        if (!blocks.some(x => x.x === b.x && x.y === b.y)) {
-          blocks.push(b);
-        }
+        const key = b.x + "," + b.y;
+        blocks[key] = b;
       }
     }
 
-    // send to everyone
-    const payload = JSON.stringify({ players, blocks });
+    broadcast();
+  });
 
-    wss.clients.forEach(client => {
-      if (client.readyState === 1) {
-        client.send(payload);
-      }
-    });
+  ws.on("close", () => {
+    if (playerId) {
+      delete players[playerId];
+      broadcast();
+    }
   });
 });
+
+function broadcast(){
+  const payload = JSON.stringify({
+    players,
+    blocks: Object.values(blocks)
+  });
+
+  wss.clients.forEach(client => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(payload);
+    }
+  });
+}
