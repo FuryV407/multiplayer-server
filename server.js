@@ -1,31 +1,41 @@
-const WebSocket = require('ws');
-const PORT = process.env.PORT || 3000;
-const wss = new WebSocket.Server({ port: PORT });
+const WebSocket = require("ws");
+
+const wss = new WebSocket.Server({
+  port: process.env.PORT || 3000
+});
 
 let players = {};
 let blocks = [];
 
-function broadcast(data){
-  const str = JSON.stringify(data);
-  wss.clients.forEach(c=>{
-    if(c.readyState===WebSocket.OPEN) c.send(str);
+wss.on("connection", ws => {
+
+  // send world when someone joins
+  ws.send(JSON.stringify({ players, blocks }));
+
+  ws.on("message", msg => {
+    let data;
+    try { data = JSON.parse(msg); }
+    catch { return; }
+
+    if (data.player) {
+      players[data.player.id] = data.player;
+    }
+
+    if (data.blocks) {
+      for (let b of data.blocks) {
+        if (!blocks.some(x => x.x === b.x && x.y === b.y)) {
+          blocks.push(b);
+        }
+      }
+    }
+
+    // send to everyone
+    const payload = JSON.stringify({ players, blocks });
+
+    wss.clients.forEach(client => {
+      if (client.readyState === 1) {
+        client.send(payload);
+      }
+    });
   });
-}
-
-wss.on('connection', ws => {
-  ws.on('message', msg => {
-    const data = JSON.parse(msg);
-
-    // Update player
-    if(data.type==='playerUpdate') players[data.id] = data.player;
-
-    // Update blocks
-    if(data.type==='blockUpdate') blocks = data.blocks;
-
-    // Send updated state to all clients
-    broadcast({type:'players', players, blocks});
-  });
-
-  // Send initial state to new client
-  ws.send(JSON.stringify({type:'init', players, blocks}));
 });
